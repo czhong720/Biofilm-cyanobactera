@@ -1,0 +1,2120 @@
+######### All the import files or files can be found in the Supplementary Data, addtionally instructions can contact the authors upon reasonable requests
+
+
+######### Software in R
+
+library(readxl)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+library(tidyverse)
+library(phyloseq)
+library(vegan)
+library(qiime2R)
+library(randomcoloR)
+library(igraph)
+library(VennDiagram)
+library(miseqR.R)
+library(ggrepel)
+library(ggfortify)
+library(viridis)
+library(ecodist)
+library(randomcoloR)
+library(RColorBrewer)
+library("writexl")
+library(randomcoloR)
+library(maps)
+library(dplyr)
+library("ggvenn")
+library(corrplot)
+library("Hmisc")
+library(geosphere)
+library("corrplot")
+library(ade4)
+
+#######  Making Map
+--------------------------------------------------------------------
+ 
+ map_data("world") 
+
+Mapping_phyloseq <- read_excel("~/Desktop/Qian_Lab/biofilm101/Mapping_phyloseq.xlsx")
+
+worldmap <- map_data("world") 
+
+ggplot() +
+  geom_polygon(data = worldmap, aes(x=long, y = lat, group = group), fill="gray80") +
+  geom_point( color="black",shape=21)+
+  geom_point( data=Mapping_phyloseq, aes(x=Long, y=Lat, fill=Locations, shape=Type, size=Sample_size))+
+  scale_shape_manual(values=c(21,24))+
+  scale_fill_manual(values=c( "#BC802C","#608E60","#E376A9","#BF5E4D","#FEC52D","#7E4973","#EB8336","#297CA5","#329E62","#E7524B"))+
+  theme_bw()+theme_void()+
+  scale_size_continuous(range = c(3, 8))
+
+
+
+
+########   Taxa Profiling
+-------------------------------------------------------------------
+
+ Full_OTU_table <- read_excel("~/Desktop/Qian_Lab/biofilm101/Full_OTU_table.xlsx", 
+                              sheet = "Sheet2")
+
+
+ X16Staxa_xaxis_list <- read_csv("~/Desktop/Qian_Lab/biofilm101/16Staxa_xaxis_list.txt", 
+                                 col_names = FALSE)
+ 
+ X16Staxa_xaxis_list <- as.vector(unlist(X16Staxa_xaxis_list))
+ 
+ taxonomy_annotation_GreenGene_Cyanobacteria_chloroplast <- read_excel("~/Desktop/Qian_Lab/biofilm101/taxonomy_annotation_GreenGene_Cyanobacteria_chloroplast.xlsx")
+ 
+ Full_OTU_table_gather <-  Full_OTU_table %>% gather("OTU_ID","count", -Sample) %>% group_by(Sample)
+ 
+ 
+ #removeID <- as.vector(taxonomy_annotation_GreenGene_Cyanobacteria_chloroplast$OTU_ID)
+ 
+
+# Full_OTU_table_gather$OTU_ID == removeID
+ 
+# Full_OTU_table_gather <-  Full_OTU_table_gather %>% filter ( ! OTU_ID %in%  removeID)
+ 
+ 
+ 
+ taxonomy_annotation_GreenGene1 <- read_excel("~/Desktop/Qian_Lab/biofilm101/taxonomy_annotation_GreenGene1.xlsx")
+ 
+ full_OTU_table <- merge(   taxonomy_annotation_GreenGene1,  Full_OTU_table_gather, by="OTU_ID")
+ 
+ 
+ 
+ full_OTU_table <- full_OTU_table  %>% 
+   mutate(taxonomy = case_when(Phylum == "Cyanobacteria;" ~ "Cyanobacteria", 
+                               Phylum == "Unclassified;"  ~ "Unclassified",
+                               Phylum == "Chloroplast;" ~ "Chloroplast",
+                               TRUE ~ "Other Phyla"))
+ 
+ 
+ full_OTU_table_percent <-  full_OTU_table %>% group_by(Sample) %>% mutate(percent=count/sum(count)*100)
+ 
+
+
+ -------------------- ### Phylum-level plot
+ 
+ ggplot( full_OTU_table_percent, aes(x=Sample, y=percent, fill=taxonomy)) + 
+   geom_bar(stat="identity", width = 1)+
+   ylab('')+
+   xlab('')+
+   theme_bw()+
+   theme(text = element_text(size=24), 
+         axis.text.x = element_text(size=24),
+         axis.text.y = element_text(size=24),
+         legend.text=element_text(size=24)
+   )+
+   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+         axis.line = element_line(colour = "black"),
+         panel.border = element_rect(colour = "black", fill=NA, size=1))+
+   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+   scale_color_manual(values=c("#EB8336","#297CA5" ,'#E7524B','#329E62'))+
+   scale_fill_manual(values=c("#EB8336", "#297CA5" , '#E7524B','#329E62'))+
+   scale_x_discrete(limits=c(X16Staxa_xaxis_list))+
+   theme(legend.position="none")
+
+
+
+full_OTU_table_percent    %>%
+   filter(str_detect(Sample, str_c("B-", collapse="|"))) %>% 
+  filter(Phylum == "Cyanobacteria;") %>%
+  group_by(Sample) %>%
+  summarise(sum=sum(percent))%>%
+  summarise(mean=mean(sum),
+            median=median(sum),
+            sd=sd(sum))
+
+  
+   
+full_OTU_table_percent    %>%
+  filter(str_detect(Sample, str_c("B-", collapse="|"))) %>%
+  group_by(Phylum) %>% 
+  summarise(mean=sum(percent)/101) %>% 
+   arrange(desc(mean))
+ 
+full_OTU_table_biofilm_percent  <- full_OTU_table_percent  %>%
+  filter(str_detect(Sample, str_c("B-", collapse="|"))) 
+
+full_OTU_table_biofilm_percent   %>% filter(Sample %in% c("B-SY2","B-SY4","B-SY5","B-Beach1","B-Beach2","B-Rock1","B-Rock2")) %>%
+  group_by(Phylum) %>% 
+  summarise(mean=sum(percent)/7) %>%
+  arrange(desc(mean))
+
+
+
+full_OTU_table_biofilm_percent %>% filter(!Sample %in% c("B-SY2","B-SY4","B-SY5","B-Beach1","B-Beach2","B-Rock1","B-Rock2")) %>%
+  group_by(Phylum) %>% 
+  summarise(mean=sum(percent)/94) %>%
+  arrange(desc(mean))
+
+
+
+full_OTU_table_percent    %>%
+  filter(str_detect(Sample, str_c("W-", collapse="|"))) %>% 
+  filter(Phylum == "Cyanobacteria;") %>%
+  group_by(Sample) %>%
+  summarise(sum=sum(percent))%>%
+  summarise(mean=mean(sum),
+            median=median(sum),
+            sd=sd(sum))
+
+
+full_OTU_table_percent    %>%
+  filter(str_detect(Sample, str_c("W-", collapse="|"))) %>% 
+  group_by(Phylum) %>% 
+  summarise(mean=sum(percent)/91) %>% 
+  arrange(desc(mean))
+
+
+
+ 
+
+ full_OTU_table_Cyanobacteria <- full_OTU_table %>% filter(Phylum %in% "Cyanobacteria;")
+ 
+ full_OTU_table_Cyanobacteria <-  full_OTU_table_Cyanobacteria %>% group_by(Sample) %>% mutate(`Relative abundance`=count/sum(count)*100)
+ 
+ 
+ 
+  -------------------- ### Class-level plot
+
+
+ ggplot( full_OTU_table_Cyanobacteria, aes(x=Sample, y=`Relative abundance`, fill=Class)) + 
+   geom_bar(stat="identity", width = 1)+
+   ylab('')+
+   xlab('')+
+   theme_bw()+
+   theme(text = element_text(size=24), 
+         axis.text.x = element_text(size=24),
+         axis.text.y = element_text(size=24),
+         legend.text=element_text(size=24)
+   )+
+   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+         axis.line = element_line(colour = "black"),
+         panel.border = element_rect(colour = "black", fill=NA, size=1))+
+   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+   scale_color_manual(values=c("#F0E135" ,"#EB8336","#329E62","#815194","#E7524B","#297CA5","#91CA5E"))+
+   scale_fill_manual(values=c("#F0E135" ,"#EB8336","#329E62","#815194","#E7524B","#297CA5","#91CA5E"))+
+   scale_x_discrete(limits=c(X16Staxa_xaxis_list))+
+   theme(legend.position="none")
+
+
+
+
+ top_50genera_index <- full_OTU_table_Cyanobacteria %>% group_by(Genus) %>% summarise(sum=sum(`Relative abundance`)) %>% arrange(desc(sum)) %>% .[1:50,1] %>% unlist(.) %>% as.vector(.)
+ 
+ full_OTU_table_Cyanobacteria %>% group_by(Sample, Genus) %>% summarise(mean=sum(`Relative abundance`)/101) %>%  
+   filter(Genus %in% top_50genera_index) %>%
+   ggplot(aes(Sample, Genus, fill= mean)) + 
+   geom_tile() +
+   scale_x_discrete(limits=c(X16Staxa_xaxis_list))+
+   theme_bw()+
+   theme(text = element_text(size=24, color="black"), 
+         axis.text.x = element_text(size=24,color="black"),
+         axis.text.y = element_text(size=24,color="black"),
+         legend.text=element_text(size=24,color="black")
+   )+
+   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+         axis.line = element_line(colour = "black"),
+         panel.border = element_rect(colour = "black", fill=NA, size=1))+
+   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+   
+ 
+ 
+ 
+ full_OTU_table_Cyanobacteria_biofilm <-   full_OTU_table_Cyanobacteria %>% group_by(taxonomy) %>% arrange(desc(`Relative abundance`)) %>% 
+   filter(str_detect(Sample, str_c("B-", collapse="|")))
+ 
+ 
+ full_OTU_table_Cyanobacteria_biofilm  %>%
+   group_by(Class) %>% 
+   summarise(mean=sum(`Relative abundance`)/101) %>% 
+   arrange(desc(mean))
+ 
+ full_OTU_table_Cyanobacteria_biofilm  %>%
+   group_by(Genus) %>% 
+   summarise(mean=sum(`Relative abundance`)/101) %>% 
+   arrange(desc(mean)) %>%
+   filter(mean>0)
+ 
+ 
+
+ 
+ 
+ full_OTU_table_Cyanobacteria_biofilm  %>% filter(Sample %in% c("B-SY2","B-SY4","B-SY5","B-Beach1","B-Beach2","B-Rock1","B-Rock2")) %>%
+   group_by(Class) %>% 
+   summarise(mean=sum(`Relative abundance`)/7)
+ 
+ 
+ 
+ full_OTU_table_Cyanobacteria_biofilm %>% filter(!Sample %in% c("B-SY2","B-SY4","B-SY5","B-Beach1","B-Beach2","B-Rock1","B-Rock2")) %>%
+   group_by(Class) %>% 
+   summarise(mean=sum(`Relative abundance`)/94)
+ 
+ 
+
+ 
+ full_OTU_table_Cyanobacteria_seawater <-  full_OTU_table_Cyanobacteria %>% group_by(taxonomy) %>% arrange(desc(`Relative abundance`)) %>% 
+   filter(str_detect(Sample, str_c("W-", collapse="|")))
+ 
+ 
+
+
+ full_OTU_table_Cyanobacteria_seawater    %>%
+   group_by(Class) %>% 
+   summarise(mean=sum(`Relative abundance`)/91) %>% 
+   arrange(desc(mean))
+ 
+ 
+ 
+ full_OTU_table_Cyanobacteria_seawater    %>%
+   group_by(Genus) %>% 
+   summarise(mean=sum(`Relative abundance`)/91) %>% 
+   arrange(desc(mean))%>%
+   filter(mean>0)
+ 
+
+
+
+
+
+ ############ correlation between toxa ---> taxa dependency assessment
+
+ full_OTU_table_biofilm <- full_OTU_table %>% filter(str_detect(Sample, str_c("B-", collapse="|")))
+ 
+ full_OTU_table_biofilm_spread <- full_OTU_table_biofilm %>% group_by(Sample,Phylum) %>% summarise(sum=sum(count)) 
+ 
+  OTU_all <- full_OTU_table_biofilm_spread %>% spread(Phylum, sum) %>% column_to_rownames(var="Sample")
+ 
+  correlation_biofilm_all <- rcorr(as.matrix( OTU_all),type = 'spearman')
+ 
+  
+  #biofilm cyanobacteria dependency to other taxa
+ 
+  table(data.frame(correlation_biofilm_all$P) %>% select(17) < 0.05)
+data.frame(correlation_biofilm_all$P)[17,]
+  
+  table(data.frame(correlation_biofilm_all$r) %>% select(17) < 0)
+  
+  biofilm_p=data.frame(correlation_biofilm_all$P) %>% select(17) 
+  biofilm_r=data.frame(correlation_biofilm_all$r) %>% select(17)
+  biofilm_p_r <- cbind(biofilm_p, biofilm_r)
+  table(biofilm_p_r[,2] <0)
+  table(biofilm_p_r[,1] < 0.05 & biofilm_p_r[,2] <0)
+  table(biofilm_p_r[,1] < 0.05 & biofilm_p_r[,2] >0)
+  biofilm_p_r[biofilm_p_r[,1] < 0.05 & biofilm_p_r[,2] >0,]
+  
+
+  full_OTU_table_biofilm_spread <- full_OTU_table_biofilm_spread %>% spread(Phylum, sum) %>% column_to_rownames(var="Sample")
+  correlation_biofilm <- rcorr(as.matrix( full_OTU_table_biofilm_spread),type = 'spearman')
+  correlation_biofilm_matrix <- correlation_biofilm$r
+  
+  
+  corrplot(correlation_biofilm_matrix, type = "upper", tl.pos = "td",
+           method = "square", tl.cex = 0.9, tl.col = 'black', cl.cex= 0.7,
+           order = "hclust", diag = FALSE,col = colorRampPalette(c( "#053061","#2166AC","#4393C3", "#92C5DE", "#D1E5F0",  "#F7F7F7","#FDDBC7", "#F4A582", 
+                                                                    "#D6604D","#B2182B","#67001F"))(200),
+           p.mat = correlation_biofilm$P, sig.level = 0.05, insig = "blank")
+  
+  
+ top10 <- full_OTU_table_biofilm_spread %>% .[,-1] %>% group_by(Phylum) %>% summarise(sum=sum(sum)) %>% arrange(desc(sum)) %>% .[1:10,1]
+ top10<-as.vector(top10$Phylum)
+ full_OTU_table_biofilm_spread <- full_OTU_table_biofilm_spread %>% filter(Phylum %in% top10) %>% spread(Phylum, sum) %>% column_to_rownames(var="Sample")
+ 
+correlation_biofilm <- rcorr(as.matrix( full_OTU_table_biofilm_spread),type = 'spearman')
+correlation_biofilm_matrix <- correlation_biofilm$r
+
+corrplot(correlation_biofilm_matrix, type = "upper", tl.pos = "td",
+         method = "square", tl.cex = 0.9, tl.col = 'black', cl.cex= 0.7,
+         order = "hclust", diag = FALSE,col = colorRampPalette(c( "#053061","#2166AC","#4393C3", "#92C5DE", "#D1E5F0",  "#F7F7F7","#FDDBC7", "#F4A582", 
+                                                                  "#D6604D","#B2182B","#67001F"))(200),
+         p.mat = correlation_biofilm$P, sig.level = 0.05, insig = "blank")
+ 
+ 
+
+
+ 
+full_OTU_table_seawater <- full_OTU_table %>% filter(str_detect(Sample, str_c("W-", collapse="|")))
+
+full_OTU_table_seawater_spread <- full_OTU_table_seawater %>% group_by(Sample,Phylum) %>% summarise(sum=sum(count)) 
+
+OTU_all_seawater <- full_OTU_table_seawater_spread %>% spread(Phylum, sum) %>% column_to_rownames(var="Sample")
+
+correlation_seawater_all <- rcorr(as.matrix(OTU_all_seawater),type = 'spearman')
+
+
+
+
+################## ------------ Substrata analysis
+
+Full_OTU_table <- read_excel("~/Desktop/Qian_Lab/biofilm101/Full_OTU_table.xlsx", 
+                             sheet = "Sheet2")
+
+Mapping_phyloseq <- read_excel("~/Desktop/Qian_Lab/biofilm101/Mapping_phyloseq.xlsx")
+
+Full_OTU_table$Location <-  as.vector(Mapping_phyloseq$Locations_Zhang)
+Full_OTU_table$Substrata <-  as.vector(Mapping_phyloseq$Substrata)
+Full_OTU_table$Type <-  as.vector(Mapping_phyloseq$Type)
+Full_OTU_table$`Duration for biofilm development`<-as.vector(Mapping_phyloseq$`Duration for biofilm development`)
+
+taxonomy_annotation_GreenGene_Cyanobacteria_chloroplast <- read_excel("~/Desktop/Qian_Lab/biofilm101/taxonomy_annotation_GreenGene_Cyanobacteria_chloroplast.xlsx")
+
+Full_OTU_table_gather <-  Full_OTU_table %>% gather("OTU_ID","count", -c(Sample,Location,Substrata,Type,`Duration for biofilm development`)) %>% group_by(Sample)
+
+removeID <- as.vector(taxonomy_annotation_GreenGene_Cyanobacteria_chloroplast$OTU_ID)
+
+
+Full_OTU_table_gather <-  Full_OTU_table_gather %>% filter ( ! OTU_ID %in%  removeID)
+
+
+taxonomy_annotation_GreenGene1 <- read_excel("~/Desktop/Qian_Lab/biofilm101/taxonomy_annotation_GreenGene1.xlsx")
+
+full_OTU_table <- merge(   taxonomy_annotation_GreenGene1,  Full_OTU_table_gather, by="OTU_ID")
+
+full_OTU_table_Cyanobacteria <- full_OTU_table %>% filter(Phylum == "Cyanobacteria;")
+
+full_OTU_table_Cyanobacteria <- full_OTU_table_Cyanobacteria %>% group_by(Sample, Location,Substrata,Type, `Duration for biofilm development`) %>% summarise(Cyanobacteria_sum=sum(count))
+
+
+ggplot(full_OTU_table_Cyanobacteria, aes(x=Location, y=Cyanobacteria_sum)) + 
+  geom_boxplot()
+
+Location.aov <- aov(Cyanobacteria_sum ~Location , data = full_OTU_table_Cyanobacteria)
+summary(Location.aov )
+
+
+
+full_OTU_table_Cyanobacteria %>% group_by(Type) %>% summarise(mean=mean(Cyanobacteria_sum),
+                                                              sd=sd(Cyanobacteria_sum))
+
+
+ggplot(full_OTU_table_Cyanobacteria, aes(x=Type, y=Cyanobacteria_sum)) + 
+  geom_boxplot()+
+  ylab('')+
+  xlab('')+
+  theme_bw()+
+  theme(text = element_text(size=24, color="black"), 
+        axis.text.x = element_text(size=24,color="black"),
+        axis.text.y = element_text(size=24,color="black"),
+        legend.text=element_text(size=24,color="black")
+  )+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+full_OTU_table_Cyanobacteria_rock <- full_OTU_table_Cyanobacteria %>% filter(Substrata %in% c("Rock panel","0.1um","Tara"))
+
+
+ggplot(full_OTU_table_Cyanobacteria_rock, aes(x=Type, y=Cyanobacteria_sum)) + 
+  geom_boxplot()+
+  ylab('')+
+  xlab('')+
+  theme_bw()+
+  theme(text = element_text(size=24, color="black"), 
+        axis.text.x = element_text(size=24,color="black"),
+        axis.text.y = element_text(size=24,color="black"),
+        legend.text=element_text(size=24,color="black")
+  )+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+full_OTU_table_Cyanobacteria_rock %>% group_by(Type) %>% summarise(mean=mean(Cyanobacteria_sum),
+                                                                   
+                                                              sd=sd(Cyanobacteria_sum))
+
+
+full_OTU_table_Cyanobacteria_norock <- full_OTU_table_Cyanobacteria %>% filter(!Substrata %in% c("Rock panel"))
+full_OTU_table_Cyanobacteria_norock %>% group_by(Type) %>% summarise(mean=mean(Cyanobacteria_sum),
+                                                                   sd=sd(Cyanobacteria_sum))
+
+
+two.way <- aov(Cyanobacteria_sum ~ Type, data = full_OTU_table_Cyanobacteria_rock)
+summary(two.way)
+tukey.test <- TukeyHSD(two.way)
+tukey.test
+
+
+
+Substrata.aov <- aov(Cyanobacteria_sum ~Type , data = full_OTU_table_Cyanobacteria)
+summary(Substrata.aov )
+
+
+
+
+ggplot(full_OTU_table_Cyanobacteria, aes(x=reorder(Substrata,-Cyanobacteria_sum), y=Cyanobacteria_sum)) + 
+  geom_boxplot()+
+  ylab('')+
+  xlab('')+
+  theme_bw()+
+  theme(text = element_text(size=24, color="black"), 
+        axis.text.x = element_text(size=24,color="black"),
+        axis.text.y = element_text(size=24,color="black"),
+        legend.text=element_text(size=24,color="black")
+  )+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+Substrata.aov <- aov(Cyanobacteria_sum ~Substrata , data = full_OTU_table_Cyanobacteria)
+summary(Substrata.aov )
+
+
+ggplot(full_OTU_table_Cyanobacteria, aes(x=Type, y=Cyanobacteria_sum)) + 
+  geom_boxplot()+
+  ylab('')+
+  xlab('')+
+  theme_bw()+
+  theme(text = element_text(size=24, color="black"), 
+        axis.text.x = element_text(size=24,color="black"),
+        axis.text.y = element_text(size=24,color="black"),
+        legend.text=element_text(size=24,color="black")
+  )+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+
+
+full_OTU_table_Cyanobacteria %>% group_by(Substrata) %>% summarise(mean=mean(Cyanobacteria_sum))
+
+
+
+
+
+######### Making PCoA plot
+ ------------------------------
+   
+   
+   
+   OTUtabel_10000miTags_Cyanobacteria_phyloseq <- read_excel("~/Desktop/Qian_Lab/biofilm101/OTUtabel_10000miTags_Cyanobacteria_phyloseq.xlsx")
+ 
+ Cyanobacteria_OTU <- as.vector(Cyanobacteria_OTU$OTU_ID)
+ 
+ OTUtabel_10000miTags_Cyanobacteria_phyloseq <-    OTUtabel_10000miTags_Cyanobacteria_phyloseq %>% filter(OTU_ID %in%  Cyanobacteria_OTU)
+ 
+ 
+ OTUtabel_10000miTags_Cyanobacteria_phyloseq <- column_to_rownames( OTUtabel_10000miTags_Cyanobacteria_phyloseq,"OTU_ID")
+
+ 
+ OTUtabel_10000miTags_Cyanobacteria_phyloseq<- otu_table(OTUtabel_10000miTags_Cyanobacteria_phyloseq, taxa_are_rows = TRUE) 
+
+ 
+ taxonomy_annotation_GreenGene_Cyanobacteria_phyloseq <- read_excel("~/Desktop/Qian_Lab/biofilm101/taxonomy_annotation_GreenGene_Cyanobacteria_phyloseq_nochloroplast.xlsx")
+ 
+ taxonomy_annotation_GreenGene_Cyanobacteria_phyloseq <- column_to_rownames(  taxonomy_annotation_GreenGene_Cyanobacteria_phyloseq,"OTU_ID")
+
+ listrowname <- rownames( taxonomy_annotation_GreenGene_Cyanobacteria_phyloseq)
+ listcolname <- colnames(taxonomy_annotation_GreenGene_Cyanobacteria_phyloseq)
+   
+ taxonomy_annotation_GreenGene_Cyanobacteria_phyloseq <- tax_table( taxonomy_annotation_GreenGene_Cyanobacteria_phyloseq)
+ 
+rownames( taxonomy_annotation_GreenGene_Cyanobacteria_phyloseq) <- listrowname
+colnames(taxonomy_annotation_GreenGene_Cyanobacteria_phyloseq) <- listcolname
+
+Mapping_phyloseq <- read_excel("~/Desktop/Qian_Lab/biofilm101/Mapping_phyloseq.xlsx")
+
+Mapping_phyloseq<- column_to_rownames(  Mapping_phyloseq,"Sample")
+
+Mapping_phyloseq <- sample_data(Mapping_phyloseq)
+
+Cyanobacteria_physeq = phyloseq( OTUtabel_10000miTags_Cyanobacteria_phyloseq,  taxonomy_annotation_GreenGene_Cyanobacteria_phyloseq,Mapping_phyloseq )
+
+Cyanobacteria_physeq_bray <- phyloseq::distance(physeq = Cyanobacteria_physeq, method = "bray")
+
+Cyanobacteria_physeq_ord <- ordinate(
+  physeq = Cyanobacteria_physeq, 
+  method = "PCoA",
+  distance = Cyanobacteria_physeq_bray,
+  formula = ~ Type
+)
+
+
+
+Cyanobacteria_physeq_ord <- ordinate(Cyanobacteria_physeq, "PCoA", "bray", formula = ~Type)
+
+Cyanobacteria_physeq_PCoA <- plot_ordination(Cyanobacteria_physeq, Cyanobacteria_physeq_ord, type="samples", color="Locations", shape="Type")
+Cyanobacteria_physeq_PCoA <- plot_ordination(Cyanobacteria_physeq, Cyanobacteria_physeq_ord, type="samples", color="Locations", shape="Type", justDF=T)
+Cyanobacteria_physeq_PCoA$Locations
+
+
+
+
+
+ggplot(Cyanobacteria_physeq_PCoA , aes(x=  Axis.1 , y=Axis.2, shape=Type))+
+  geom_point( color="black",shape=21)+
+  geom_point( aes(fill=Locations),size=8)+
+  scale_shape_manual(values=c(21,24))+
+  scale_fill_manual(values=c( "#BC802C","#608E60","#E376A9","#BF5E4D","#FEC52D","#7E4973","#EB8336","#297CA5","#329E62","#E7524B"))+
+  stat_ellipse( size=0.5,level = 0.95,type = "norm")+
+  theme_bw()+
+  theme(text = element_text(size=24), 
+        axis.text.x = element_text(size=24),
+        axis.text.y = element_text(size=24),
+        legend.text=element_text(size=24)
+  )+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  theme(legend.position="none")+ 
+  theme(axis.line = element_line(colour = "black"),
+                                       panel.grid.major = element_blank(),
+                                       panel.grid.minor = element_blank(),
+                                       panel.border = element_blank(),
+                                       panel.background = element_blank())
+
+
+
+
+
+PC_1 <- Cyanobacteria_physeq_PCoA[,c(1,3)]
+
+ggplot( PC_1, aes(x= Axis.1, y=Type)) + 
+  geom_boxplot(aes(fill=Type))+
+  ylab('')+
+  xlab('')+
+  theme_bw()+
+  theme(text = element_text(size=24), 
+        axis.text.x = element_text(size=24),
+        axis.text.y = element_text(size=24),
+        legend.text=element_text(size=24)
+  )+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+        axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+  scale_fill_manual(values=c("#44ABCB" ,"#C64F53"))+
+  theme(axis.line = element_line(colour = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank())+
+  theme(legend.position="none")
+
+
+two.way <- aov(Axis.1 ~ Type, data = PC_1)
+summary(two.way)
+
+
+
+plot_ordination(Cyanobacteria_physeq, Cyanobacteria_physeq_ord , type="taxa",  color="Genus")+
+  geom_point(size=4)+
+  facet_wrap(~Genus)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  theme_bw()+
+  theme(strip.background =element_rect(fill="white"),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  theme(text = element_text(size=24, colour = "black"), 
+        axis.text.x = element_text(size=24,colour = "black"),
+        axis.text.y = element_text(size=24,colour = "black"),
+        legend.text=element_text(size=24,colour = "black")
+  )+
+  theme(legend.position="none")
+
+
+
+  ############## Alpha-diversity analysis
+
+
+  # making diversity plot
+otu_table(Cyanobacteria_physeq)
+tax_table(Cyanobacteria_physeq)
+
+colSums(otu_table(Cyanobacteria_physeq))
+
+Cyanobacteria_physeq_diversity <- estimate_richness(Cyanobacteria_physeq, split = TRUE, measures=c("ACE", "Observed", "InvSimpson", "Shannon", "Chao1"))
+
+
+Cyanobacteria_physeq_diversity_type <-  Cyanobacteria_physeq_diversity %>%
+  mutate(Type = case_when(
+    startsWith(rownames(Cyanobacteria_physeq_diversity), "B.") ~ "Biofilm",
+    startsWith(rownames(Cyanobacteria_physeq_diversity), "W.") ~ "Seawater"
+  ))
+
+
+Cyanobacteria_physeq_diversity_type %>% na.omit(.) %>% group_by(Type) %>% summarise(mean=mean(c(ACE)),
+                                                                     median=median(ACE),
+                                                                     sd=sd(ACE))
+
+  
+Cyanobacteria_physeq_diversity_type %>% group_by(Type) %>% summarise(mean=mean(c(Observed)),
+                                                                     median=median(Observed),
+                                                                     sd=sd(Observed))
+
+Cyanobacteria_physeq_diversity_type %>% group_by(Type) %>% summarise(mean=mean(c(Chao1)),
+                                                                     median=median(Chao1),
+                                                                     sd=sd(Chao1))
+
+Cyanobacteria_physeq_diversity_type %>% group_by(Type) %>% summarise(mean=mean(c(Shannon)),
+                                                                     median=median(Shannon),
+                                                                     sd=sd(Shannon))
+
+Cyanobacteria_physeq_diversity_type %>% na.omit(.) %>% group_by(Type) %>% summarise(mean=mean(c(InvSimpson)),
+                                                                     median=median(InvSimpson),
+                                                                     sd=sd(InvSimpson))
+
+
+ggplot( Cyanobacteria_physeq_diversity_type, aes(x= Type, y=ACE)) + 
+  geom_boxplot(aes(fill=Type), draw_quantiles = c(0.5))+
+  ylab('')+
+  xlab('')+
+  theme_bw()+
+  theme(text = element_text(size=24), 
+        axis.text.x = element_text(size=24),
+        axis.text.y = element_text(size=24),
+        legend.text=element_text(size=24)
+  )+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+        axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+  scale_fill_manual(values=c("#44ABCB" ,"#C64F53"))
+
+
+ggplot( Cyanobacteria_physeq_diversity_type, aes(x= Type, y=Observed)) + 
+  geom_violin(aes(fill=Type), draw_quantiles = c(0.5))+
+  ylab('')+
+  xlab('')+
+  theme_bw()+
+  theme(text = element_text(size=24), 
+        axis.text.x = element_text(size=24),
+        axis.text.y = element_text(size=24),
+        legend.text=element_text(size=24)
+  )+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+        axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+  scale_fill_manual(values=c("#44ABCB" ,"#C64F53"))
+
+
+ggplot( Cyanobacteria_physeq_diversity_type, aes(x= Type, y=Chao1)) + 
+  geom_violin(aes(fill=Type), draw_quantiles = c(0.5))+
+  ylab('')+
+  xlab('')+
+  theme_bw()+
+  theme(text = element_text(size=24), 
+        axis.text.x = element_text(size=24),
+        axis.text.y = element_text(size=24),
+        legend.text=element_text(size=24)
+  )+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+        axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+  scale_fill_manual(values=c("#44ABCB" ,"#C64F53"))
+
+
+ggplot( Cyanobacteria_physeq_diversity_type, aes(x= Type, y=Shannon)) + 
+  geom_violin(aes(fill=Type), draw_quantiles = c(0.5))+
+  ylab('')+
+  xlab('')+
+  theme_bw()+
+  theme(text = element_text(size=24), 
+        axis.text.x = element_text(size=24),
+        axis.text.y = element_text(size=24),
+        legend.text=element_text(size=24)
+  )+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+        axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+  scale_fill_manual(values=c("#44ABCB" ,"#C64F53"))
+
+ggplot( Cyanobacteria_physeq_diversity_type, aes(x= Type, y=InvSimpson)) + 
+  geom_violin(aes(fill=Type), draw_quantiles = c(0.5))+
+  ylab('')+
+  xlab('')+
+  theme_bw()+
+  theme(text = element_text(size=24), 
+        axis.text.x = element_text(size=24),
+        axis.text.y = element_text(size=24),
+        legend.text=element_text(size=24)
+  )+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+        axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+  scale_fill_manual(values=c("#44ABCB" ,"#C64F53"))
+
+
+two.way <- aov(Observed ~ Type, data = Cyanobacteria_physeq_diversity_type)
+summary(two.way)
+
+two.way <- aov(Chao1~ Type, data = Cyanobacteria_physeq_diversity_type)
+summary(two.way)
+
+two.way <- aov(Shannon~ Type, data = Cyanobacteria_physeq_diversity_type)
+summary(two.way)
+
+two.way <- aov(InvSimpson~ Type, data = Cyanobacteria_physeq_diversity_type)
+summary(two.way)
+
+
+
+
+b = otu_table(Cyanobacteria_physeq)[,1:91]
+w = otu_table(Cyanobacteria_physeq)[,-(1:91)]
+b1 = b[,which(colSums(b)>0)]
+w1 = w[,which(colSums(w)>0)]
+
+d1 = vegdist(b1,"jaccard")
+d2 = vegdist(w1,"jaccard")
+view(d1)
+boxplot(d1,d2, col=c("#44ABCB" ,"#C64F53"))
+d3 <- data.frame(cbind(d1,d2))
+d4 <- aov( d1~d2, d3)
+summary(d4)
+
+
+########### Venn diagram
+-----------------------------------------
+
+Cyanobacteria_OTU <- read_excel("~/Desktop/Qian_Lab/biofilm101/taxonomy_annotation_GreenGene_Cyanobacteria_phyloseq_nochloroplast.xlsx", 
+                                col_types = c("text", "blank", "blank", 
+                                              "blank", "blank", "blank", "blank", 
+                                              "blank"))
+
+
+Total_OTU <- read_excel("~/Desktop/Qian_Lab/biofilm101/Total OTU.xlsx")
+
+Cyanobacteria_OTU <- as.vector(unlist(Cyanobacteria_OTU))
+
+Cyanobacteria_biofilm_OTU <- as.vector(unlist(Total_OTU$`101 biofilms`))
+Cyanobacteria_biofilm_OTU<-Cyanobacteria_biofilm_OTU[Cyanobacteria_biofilm_OTU %in% Cyanobacteria_OTU]
+
+
+Cyanobacteria_OTU_24seawater <- as.vector(unlist(Total_OTU$`24 new seawater samples`))
+Cyanobacteria_OTU_67seawater <- as.vector(unlist(Total_OTU$`67 Tara seawater samples`))
+Cyanobacteria_OTU_seawater <- c(Cyanobacteria_OTU_24seawater,Cyanobacteria_OTU_67seawater)
+Cyanobacteria_OTU_seawater_unique <- unique(Cyanobacteria_OTU_seawater)
+Cyanobacteria_OTU_seawater_unique_OTU<-Cyanobacteria_OTU_seawater_unique[Cyanobacteria_OTU_seawater_unique %in% Cyanobacteria_OTU]
+
+
+
+venn.diagram(
+  x = list(Cyanobacteria_biofilm_OTU, Cyanobacteria_OTU_seawater_unique_OTU),
+  category.names = c("b" , "s"),
+  filename = 'Cyanobacteria_venn_diagramm.png',
+  output=F,
+  col="black",
+  fill = c("#44ABCB" ,"#C64F53"),
+  cex = 2,
+  fontfamily = "sans",
+  cat.cex = 1,
+  cat.default.pos = "outer",
+  cat.fontfamily = "sans")
+
+
+
+
+
+complete_Total_OTU <- read_excel("~/Desktop/Qian_Lab/biofilm101/Veen_diagram_completeTara.xlsx")
+Part_Total_OTU <- read_excel("~/Desktop/Qian_Lab/biofilm101/Total OTU.xlsx")
+full_seawatre_OTU <- c(as.vector(complete_Total_OTU$`Tara-mitags`), as.vector(Part_Total_OTU$`67 Tara seawater samples`))
+full_seawatre_OTU_unique <- unique(full_seawatre_OTU)
+
+
+
+Cyanobacteria_OTU <- as.vector(unlist(Cyanobacteria_OTU))
+
+Cyanobacteria_biofilm_OTU <- as.vector(unlist(complete_Total_OTU$`101 biofilms`))
+Cyanobacteria_biofilm_OTU<-Cyanobacteria_biofilm_OTU[Cyanobacteria_biofilm_OTU %in% Cyanobacteria_OTU]
+Cyanobacteria_OTU_24seawater <- as.vector(unlist(complete_Total_OTU$`24 new seawater samples`))
+Cyanobacteria_OTU_completeTara<- as.vector(unlist(complete_Total_OTU$`Tara-mitags`))
+full_seawatre_OTU_unique <- as.vector(unlist(full_seawatre_OTU_unique))
+Cyanobacteria_OTU_seawater <- c(Cyanobacteria_OTU_24seawater,full_seawatre_OTU_unique)
+Cyanobacteria_OTU_seawater_unique <- unique(Cyanobacteria_OTU_seawater)
+Cyanobacteria_OTU_seawater_unique_OTU<-Cyanobacteria_OTU_seawater_unique[Cyanobacteria_OTU_seawater_unique %in% Cyanobacteria_OTU]
+
+
+venn.diagram(
+  x = list(Cyanobacteria_biofilm_OTU, Cyanobacteria_OTU_seawater_unique_OTU),
+  category.names = c("b" , "s"),
+  filename = 'Cyanobacteria_venn_diagramm_complete.png',
+  output=F,
+  col="black",
+  fill = c("#44ABCB" ,"#C64F53"),
+  cex = 2,
+  fontfamily = "sans",
+  cat.cex = 1,
+  cat.default.pos = "outer",
+  cat.fontfamily = "sans")
+
+
+
+###################### generalist and specialist anlayses
+ ---------------------------------------------
+
+ Full_OTU_table <- read_excel("~/Desktop/Qian_Lab/biofilm101/Full_OTU_table.xlsx")
+
+Cyanobacteria_OTU <- read_excel("~/Desktop/Qian_Lab/biofilm101/taxonomy_annotation_GreenGene_Cyanobacteria_phyloseq_nochloroplast.xlsx", 
+                                col_types = c("text", "blank", "blank", 
+                                              "blank", "blank", "blank", "blank", 
+                                              "blank"))
+
+Cyanobacteria_OTU <- as.vector(Cyanobacteria_OTU$OTU_ID)
+
+Full_OTU_table <-    Full_OTU_table %>% filter(OTU_ID %in%  Cyanobacteria_OTU)
+
+
+Full_OTU_table_0_1<-ifelse(Full_OTU_table>0,1,0)
+Full_OTU_table_0_1_biofilm <- Full_OTU_table_0_1[,str_detect(colnames(Full_OTU_table_0_1), "B-")]
+Full_OTU_table_0_1_biofilm <- Full_OTU_table_0_1_biofilm[,1:101]
+
+rowsum_biofilm <- rowSums(Full_OTU_table_0_1_biofilm)
+
+b <- vector()
+c <- vector()
+for (i in 1:110){
+  a = sum(rowsum_biofilm  >= i)
+  b = print(paste(a))
+  c[[i]]= b
+  next
+}
+
+`Total biofilm OTU` <- as.numeric(c)
+`Total samples` <- 1:110
+
+
+
+
+
+Full_OTU_tableq_0_1_seawater<- Full_OTU_table_0_1[,str_detect(colnames(Full_OTU_table_0_1), "W-")]
+
+rowsum_seawater <- rowSums(Full_OTU_tableq_0_1_seawater)
+
+
+
+b <- vector()
+c <- vector()
+for (i in 1:110){
+  a = sum(rowsum_seawater >= i)
+  b = print(paste(a))
+  c[[i]]= b
+  next
+}
+
+
+`Total seawater OTU` <- as.numeric(c)
+
+generalist_df <- data.frame(`Total biofilm OTU`, `Total seawater OTU` , `Total samples`) 
+
+generalist_df_gather <- gather(generalist_df, "Type", "Counts", -Total.samples)
+
+
+
+ggplot(generalist_df_gather, aes(x=`Total.samples`, y=Counts, color=Type)) + 
+  geom_point()+
+  geom_smooth(method=lm, linetype = "dashed", se = FALSE)+
+  ylab('')+
+  xlab('')+
+  theme_bw()+
+  theme(text = element_text(size=20), 
+        axis.text.x = element_text(size=20),
+        axis.text.y = element_text(size=20),
+        legend.text=element_text(size=20)
+  )+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+        axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"),
+        panel.border = element_blank(),
+        panel.background = element_blank())+
+  scale_color_manual(values=c("#38618F" ,"#C64F53"))
+
+
+
+generalist_df_gather_seawater <- generalist_df_gather %>% filter(generalist_df_gather$Type == "Total.seawater.OTU")
+generalist_df_gather_biofilm <- generalist_df_gather %>% filter(generalist_df_gather$Type == "Total.biofilm.OTU")
+
+
+fit <- lm(Counts ~ Total.samples, data = generalist_df_gather_seawater)
+summary(fit)
+
+
+fit <- lm(Counts ~ Total.samples, data = generalist_df_gather_biofilm)
+summary(fit)
+
+
+
+
+# rarefied to 10000 miTag
+
+OTUtabel_10000miTags_Cyanobacteria_phyloseq <- read_excel("~/Desktop/Qian_Lab/biofilm101/OTUtabel_10000miTags_Cyanobacteria_phyloseq.xlsx")
+
+Cyanobacteria_OTU <- as.vector(Cyanobacteria_OTU$OTU_ID)
+
+OTUtabel_10000miTags_Cyanobacteria_phyloseq <-    OTUtabel_10000miTags_Cyanobacteria_phyloseq %>% filter(OTU_ID %in%  Cyanobacteria_OTU)
+
+
+OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1<-ifelse(OTUtabel_10000miTags_Cyanobacteria_phyloseq>0,1,0)
+OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_biofilm <- OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1[,str_detect(colnames(OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1), "B-")]
+OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_biofilm <- OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_biofilm[,1:101]
+
+rowsum <- rowSums(OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_biofilm)
+
+b <- vector()
+c <- vector()
+for (i in 1:100){
+  a = sum(rowsum >= i)
+  b = print(paste(a))
+  c[[i]]= b
+  next
+}
+
+`Total biofilm OTU` <- as.numeric(c)
+`Total samples` <- 1:100
+
+
+
+
+
+OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_seawater<- OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1[,str_detect(colnames(OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1), "W-")]
+
+rowsum <- rowSums(OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_seawater)
+
+
+
+b <- vector()
+c <- vector()
+for (i in 1:100){
+  a = sum(rowsum >= i)
+  b = print(paste(a))
+  c[[i]]= b
+  next
+}
+
+
+`Total seawater OTU` <- as.numeric(c)
+
+generalist_df <- data.frame(`Total biofilm OTU`, `Total seawater OTU` , `Total samples`) 
+
+generalist_df_gather <- gather(generalist_df, "Type", "Counts", -Total.samples)
+
+
+
+ggplot(generalist_df_gather, aes(x=`Total.samples`, y=Counts, color=Type)) + 
+  geom_point()+
+  geom_smooth(method=lm, linetype = "dashed", se = FALSE)+
+  ylab('')+
+  xlab('')+
+  theme_bw()+
+  theme(text = element_text(size=20), 
+        axis.text.x = element_text(size=20),
+        axis.text.y = element_text(size=20),
+        legend.text=element_text(size=20)
+  )+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+        axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"),
+        panel.border = element_blank(),
+        panel.background = element_blank())+
+  scale_color_manual(values=c("#38618F" ,"#C64F53"))+
+  ylim(0,250)
+
+
+
+
+
+generalist_df_gather_seawater <- generalist_df_gather %>% filter(generalist_df_gather$Type == "Total.seawater.OTU")
+generalist_df_gather_biofilm <- generalist_df_gather %>% filter(generalist_df_gather$Type == "Total.biofilm.OTU")
+
+  
+fit <- lm(Counts ~ Total.samples, data = generalist_df_gather_seawater)
+summary(fit)
+
+
+fit <- lm(Counts ~ Total.samples, data = generalist_df_gather_biofilm)
+summary(fit)
+
+
+OTUtabel_10000miTags_Cyanobacteria_phyloseq_no1col <- OTUtabel_10000miTags_Cyanobacteria_phyloseq[,-1]
+
+OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1<-ifelse(OTUtabel_10000miTags_Cyanobacteria_phyloseq_no1col>0,1,0)
+OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_biofilm <- OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1[,str_detect(colnames(OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1), "B-")]
+OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_biofilm <- OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_biofilm[,-c(102:103)]
+OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_biofilm_OTUid <- cbind(OTUtabel_10000miTags_Cyanobacteria_phyloseq[,1],OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_biofilm)
+
+
+
+totaloccurance_biofilm <- rowSums(OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_biofilm)
+OTUid <- OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_biofilm_OTUid[,1]
+abudance_sum_biofilm <- rowSums(OTUtabel_10000miTags_Cyanobacteria_phyloseq_no1col)
+totaloccurance_OTUid <- data.frame(cbind(totaloccurance_biofilm, OTUid,abudance_sum_biofilm))
+totaloccurance_OTUid$totaloccurance_biofilm <- as.numeric(totaloccurance_OTUid$totaloccurance_biofilm)
+totaloccurance_OTUid$abudance_sum_biofilm <- as.numeric(totaloccurance_OTUid$abudance_sum_biofilm)
+totaloccurance_OTUid <- totaloccurance_OTUid %>% mutate(Type= case_when(totaloccurance_biofilm>75 ~ "Generalists",
+                                                                        totaloccurance_biofilm< 25 & abudance_sum_biofilm/totaloccurance_biofilm > 100 ~ "Specialists",
+                                                                        TRUE ~  "Other"))
+
+
+totaloccurance_OTUid$Type<-factor(totaloccurance_OTUid$Type, levels = c("Generalists", "Specialists", "Other"))                                  
+
+ggplot(totaloccurance_OTUid, aes(x=totaloccurance_biofilm, y=abudance_sum_biofilm/totaloccurance_biofilm, color=Type)) + 
+  geom_point(size=2)+
+  ylab('')+
+  xlab('')+
+  theme_bw()+
+  theme(text = element_text(size=20), 
+        axis.text.x = element_text(size=20),
+        axis.text.y = element_text(size=20),
+        legend.text=element_text(size=20)
+  )+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+        axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+  scale_color_manual(values=c("#C64F53","9D9495"))+
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+                          axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"),
+                          panel.border = element_blank(),
+                          panel.background = element_blank())+
+  scale_y_log10()
+
+
+
+OTUtabel_10000miTags_Cyanobacteria_phyloseq_no1col <- OTUtabel_10000miTags_Cyanobacteria_phyloseq[,-1]
+
+OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1<-ifelse(OTUtabel_10000miTags_Cyanobacteria_phyloseq_no1col>0,1,0)
+OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_sewater <- OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1[,str_detect(colnames(OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1), "W-")]
+OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_sewater_OTUid <- cbind(OTUtabel_10000miTags_Cyanobacteria_phyloseq[,1],OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_sewater)
+
+
+
+totaloccurance_sewater <- rowSums(OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_sewater)
+OTUid <- OTUtabel_10000miTags_Cyanobacteria_phyloseq_0_1_sewater_OTUid[,1]
+abudance_sum_seawater <- rowSums(OTUtabel_10000miTags_Cyanobacteria_phyloseq_no1col)
+totaloccurance_OTUid <- data.frame(cbind(totaloccurance_sewater, OTUid,abudance_sum_seawater))
+totaloccurance_OTUid$totaloccurance_sewater <- as.numeric(totaloccurance_OTUid$totaloccurance_sewater)
+totaloccurance_OTUid$abudance_sum_seawater <- as.numeric(totaloccurance_OTUid$abudance_sum_seawater)
+
+totaloccurance_OTUid <- totaloccurance_OTUid %>% mutate(Type= case_when(totaloccurance_sewater>68.25 ~ "Generalists",
+                                                totaloccurance_sewater< 22.75 & abudance_sum_seawater/totaloccurance_sewater > 100 ~ "Specialists",
+                                                TRUE ~  "Other"))
+
+
+totaloccurance_OTUid$Type<-factor(totaloccurance_OTUid$Type, levels = c("Generalists", "Specialists", "Other"))                                  
+                              
+
+ggplot(totaloccurance_OTUid, aes(x=totaloccurance_sewater, y=abudance_sum_seawater/totaloccurance_sewater, color=Type)) + 
+  geom_point(size=2)+
+  ylab('')+
+  xlab('')+
+  theme_bw()+
+  theme(text = element_text(size=20), 
+        axis.text.x = element_text(size=20),
+        axis.text.y = element_text(size=20),
+        legend.text=element_text(size=20)
+  )+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+        axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+  scale_color_manual(values=c("#38618F" ,"#C64F53","9D9495"))+
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+        axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"),
+        panel.border = element_blank(),
+        panel.background = element_blank())+
+  scale_y_log10()
+
+
+
+############################ Network analysis
+----------------------------------------------
+
+
+ set.seed(123)
+  ig<-make_network(Cyanobacteria_physeq, max.dist=0.9,dist.fun="bray")
+
+  degree <- data.frame(sort(degree(ig)))
+  
+ degree <-  degree  %>%
+    mutate(Type = case_when(
+      startsWith(rownames(degree), "B-") ~ "Biofilm",
+      startsWith(rownames(degree), "W-") ~ "Seawater"
+    ))
+  
+ degree %>% group_by(Type) %>% summarise(mean=mean(sort.degree.ig..),
+                                         median=median(sort.degree.ig..),
+                                         sd=sd(sort.degree.ig..))
+  
+  sort(betweenness(ig))
+  
+  betweenness <- data.frame(sort(betweenness(ig)))
+  
+  betweenness <- betweenness  %>%
+    mutate(Type = case_when(
+      startsWith(rownames(betweenness), "B-") ~ "Biofilm",
+      startsWith(rownames(betweenness), "W-") ~ "Seawater"
+    ))
+  
+  betweenness %>% group_by(Type) %>% summarise(mean=mean(sort.betweenness.ig..),
+                                          median=median(sort.betweenness.ig..),
+                                          sd=sd(sort.betweenness.ig..))
+  
+  
+  sort(closeness(ig))
+  
+  
+  closeness <- data.frame(sort(closeness(ig)))
+  
+  closeness <- closeness  %>%
+    mutate(Type = case_when(
+      startsWith(rownames(closeness), "B-") ~ "Biofilm",
+      startsWith(rownames(closeness), "W-") ~ "Seawater"
+    ))
+  
+  closeness %>% group_by(Type) %>% summarise(mean=mean(sort.closeness.ig..),
+                                               median=median(sort.closeness.ig..),
+                                               sd=sd(sort.closeness.ig..))
+  
+  
+
+  ec <- eigen_centrality(ig)
+  sort(ec$vector)
+  
+  ec  <- data.frame(sort(ec$vector))
+  
+  ec  <- ec   %>%
+    mutate(Type = case_when(
+      startsWith(rownames(ec), "B-") ~ "Biofilm",
+      startsWith(rownames(ec), "W-") ~ "Seawater"
+    ))
+  
+  ec %>% group_by(Type) %>% summarise(mean=mean(sort.ec.vector.),
+                                             median=median(sort.ec.vector.),
+                                             sd=sd(sort.ec.vector.))
+  
+  
+  
+  
+  
+  graphics.off()
+  par(mfrow = c(2,2))
+  plot(degree(ig), typ = "h", col = "tomato", main = "Degree")
+  plot(betweenness(ig), typ = "h", col = "tomato", main = "Betweenness Centrality")
+  plot(closeness(ig), typ = "h", col = "tomato", main = "Closeness Centrality of vertices")
+  plot(ec$vector, typ = "h", col = "tomato", main = "Eigenvector Centrality Scores")
+  par(mfrow = c(1,1))
+
+
+
+
+
+ plot_network(ig,Cyanobacteria_physeq,shape="Type", color="Locations", point_size = 6,line_weight=0.2,label=NULL)+
+    theme(text = element_text(size=20), 
+          axis.text.x = element_text(size=20),
+          axis.text.y = element_text(size=20),
+          legend.text=element_text(size=20),
+          axis.line = element_line(colour = "black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank())+
+    theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+          axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+    scale_color_manual(values=c("#BC802C","#608E60","#E376A9","#BF5E4D","#FEC52D","#7E4973","#EB8336","#297CA5","#329E62","#E7524B"))+
+    scale_fill_manual(values=c("#BC802C","#608E60","#E376A9","#BF5E4D","#FEC52D","#7E4973","#EB8336","#297CA5","#329E62","#E7524B"))
+
+
+
+
+
+############## full genome annotation 
+------------------------------------------------------------
+
+
+
+metabolism_MISC_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_69fullgenome/full_genome_reference_69_annotation/genome_summaries/metabolism_summary.xlsx")
+  
+  metabolism_MISC_summary <-  metabolism_MISC_summary [,-c(2:5)]
+  
+  
+  biofilm_MISC_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_annotation_biofilm/genome_summaries/metabolism_summary.xlsx", 
+                                     sheet = "MISC")
+  
+  biofilm_MISC_summary <- biofilm_MISC_summary [,-c(1:5)]
+  
+  
+  prochlorococcus_metabolism_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_13_prochlorococcus_annotation/genome_summaries/metabolism_summary.xlsx", 
+                                                   sheet = "MISC")
+  
+  prochlorococcus_metabolism_summary <- prochlorococcus_metabolism_summary [,-c(1:5)]
+  
+  
+  syn63_metabolism_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_synechococcus63_annotation/genome_summaries/metabolism_summary.xlsx", 
+                                         sheet = "MISC")
+  
+  
+  syn63_metabolism_summary  <-  syn63_metabolism_summary[,-c(1:5)]
+  
+  
+
+  
+  all_MISC_metabolisms <- cbind( metabolism_MISC_summary,biofilm_MISC_summary, prochlorococcus_metabolism_summary, syn63_metabolism_summary)
+  
+  all_MISC_metabolisms$gene_id = c(1:649)
+  
+  all_MISC_metabolisms_pcoa <- all_MISC_metabolisms %>% column_to_rownames(var="gene_id")
+  all_MISC_metabolisms_pcoa <- t(all_MISC_metabolisms_pcoa)
+  all_MISC_metabolisms_pcoa <- all_MISC_metabolisms_pcoa[rowSums(all_MISC_metabolisms_pcoa[, -1])>0, ]
+  all_MISC_metabolisms_pcoa.bray <- vegdist(all_MISC_metabolisms_pcoa, method = "bray") 
+  
+  pcoaVS <- pco(all_MISC_metabolisms_pcoa.bray, negvals = "zero", dround = 0) 
+  pcoaVS$values
+  tot = sum(pcoaVS$values)
+  5.624282e-01/tot*100
+  2.711308e-01/tot*100
+  
+  name<-as.vector(rownames(all_MISC_metabolisms_pcoa))
+  Pcoa1<-as.vector(pcoaVS$vectors[,1])
+  Pcoa2<-as.vector(pcoaVS$vectors[,2])
+  df <- data.frame(name, Pcoa1, Pcoa2)
+  
+  df <- df%>% mutate(type = case_when(str_detect(name, "BG") ~ "Biofilm",
+                                      str_detect(name, "W-") ~ "Seawater",
+                                      TRUE ~ "reference"))
+  
+  ggplot(df , aes(Pcoa1, Pcoa2, fill=type)) + 
+    geom_point(color="black",shape=21,size=5) +
+    theme_bw()+
+    theme(text = element_text(size=24), 
+          axis.text.x = element_text(size=24),
+          axis.text.y = element_text(size=24),
+          legend.text=element_text(size=24)
+    )+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          axis.line = element_line(colour = "black"),
+          panel.border = element_rect(colour = "black", fill=NA, size=1))+
+    theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+          axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+    scale_fill_manual(values=c("#44ABCB" ,"#9D9495","#C64F53"))+
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank())+
+    theme(legend.position="none")+
+    ylab("PC 2 (14.19%)")+
+    xlab("PC 1 (29.44%)")
+  
+  anosim(all_MISC_metabolisms_pcoa.bray, df$type)
+  
+  
+  
+  
+  
+  
+  
+  metabolism_carbon_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_69fullgenome/full_genome_reference_69_annotation/genome_summaries/metabolism_summary.xlsx",
+                                        sheet = "carbon utilization")
+  
+  metabolism_carbon_summary <-  metabolism_carbon_summary[,-c(2:5)]
+  
+  
+  biofilm_carbon_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_annotation_biofilm/genome_summaries/metabolism_summary.xlsx", 
+                                     sheet = "carbon utilization")
+  
+  biofilm_carbon_summary <- biofilm_carbon_summary[,-c(1:5)]
+  
+  
+  
+  prochlorococcus_metabolism_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_13_prochlorococcus_annotation/genome_summaries/metabolism_summary.xlsx", 
+                                                   sheet = "carbon utilization")
+  
+  prochlorococcus_metabolism_summary <- prochlorococcus_metabolism_summary [,-c(1:5)]
+  
+  
+  syn63_metabolism_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_synechococcus63_annotation/genome_summaries/metabolism_summary.xlsx", 
+                                         sheet = "carbon utilization")
+  
+  
+  syn63_metabolism_summary  <-  syn63_metabolism_summary[,-c(1:5)]
+  
+  
+  all_carbon_metabolisms <- cbind( metabolism_carbon_summary,biofilm_carbon_summary,prochlorococcus_metabolism_summary, syn63_metabolism_summary )
+
+  all_carbon_metabolisms$gene_id = c(1:881)
+  
+  all_carbon_metabolisms_pcoa <- all_carbon_metabolisms %>% column_to_rownames(var="gene_id")
+  all_carbon_metabolisms_pcoa <- t(all_carbon_metabolisms_pcoa)
+  all_carbon_metabolisms_pcoa <- all_carbon_metabolisms_pcoa[rowSums(all_carbon_metabolisms_pcoa[, -1])>0, ]
+  all_carbon_metabolisms_pcoa.bray <- vegdist(all_carbon_metabolisms_pcoa, method = "bray") 
+  
+  pcoaVS <- pco(all_carbon_metabolisms_pcoa.bray, negvals = "zero", dround = 0) 
+  pcoaVS$values
+  tot = sum(pcoaVS$values)
+  3.952564e+00/tot*100
+  6.469856e-01/tot*100
+  
+  name<-as.vector(rownames(all_carbon_metabolisms_pcoa))
+  Pcoa1<-as.vector(pcoaVS$vectors[,1])
+  Pcoa2<-as.vector(pcoaVS$vectors[,2])
+  df <- data.frame(name, Pcoa1, Pcoa2)
+  
+  df <- df%>% mutate(type = case_when(str_detect(name, "BG") ~ "Biofilm",
+                                      str_detect(name, "W-") ~ "Seawater",
+                                      TRUE ~ "reference"))
+  
+  ggplot(df , aes(Pcoa1, Pcoa2, fill=type)) + 
+    geom_point(color="black",shape=21,size=5) +
+    theme_bw()+
+    theme(text = element_text(size=24), 
+          axis.text.x = element_text(size=24),
+          axis.text.y = element_text(size=24),
+          legend.text=element_text(size=24)
+    )+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          axis.line = element_line(colour = "black"),
+          panel.border = element_rect(colour = "black", fill=NA, size=1))+
+    theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+          axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+    scale_fill_manual(values=c("#44ABCB" ,"#9D9495","#C64F53"))+
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank())+
+    theme(legend.position="none")+
+    ylab("PC 2 (7.79%)")+
+    xlab("PC 1 (47.61%)")
+  
+  anosim(all_carbon_metabolisms_pcoa.bray, df$type)
+  
+  
+  
+  
+  
+  
+  
+  metabolism_Transporters_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_69fullgenome/full_genome_reference_69_annotation/genome_summaries/metabolism_summary.xlsx",
+                                          sheet = "Transporters")
+  
+  metabolism_Transporters_summary <-  metabolism_Transporters_summary[,-c(2:5)]
+  
+  
+  biofilm_Transporters_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_annotation_biofilm/genome_summaries/metabolism_summary.xlsx", 
+                                       sheet = "Transporters")
+  
+  biofilm_Transporters_summary <- biofilm_Transporters_summary[,-c(1:5)]
+  
+  
+  
+  prochlorococcus_Transporters_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_13_prochlorococcus_annotation/genome_summaries/metabolism_summary.xlsx", 
+                                                   sheet = "Transporters")
+  
+  prochlorococcus_Transporters_summary <- prochlorococcus_Transporters_summary [,-c(1:5)]
+  
+  
+  syn63_Transporters_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_synechococcus63_annotation/genome_summaries/metabolism_summary.xlsx", 
+                                         sheet = "Transporters")
+  
+  
+  syn63_Transporters_summary  <-  syn63_Transporters_summary[,-c(1:5)]
+  
+  
+  all_Transporters_metabolisms <- cbind( metabolism_Transporters_summary,biofilm_Transporters_summary,prochlorococcus_Transporters_summary, syn63_Transporters_summary )
+  
+  all_Transporters_metabolisms$gene_id = c(1:649)
+  
+  all_Transporters_metabolisms_pcoa <- all_Transporters_metabolisms %>% column_to_rownames(var="gene_id")
+  all_Transporters_metabolisms_pcoa <- t(all_Transporters_metabolisms_pcoa)
+  all_Transporters_metabolisms_pcoa <- all_Transporters_metabolisms_pcoa[rowSums(all_Transporters_metabolisms_pcoa[, -1])>0, ]
+  all_Transporters_metabolisms_pcoa.bray <- vegdist(all_Transporters_metabolisms_pcoa, method = "bray") 
+  
+  pcoaVS <- pco(all_Transporters_metabolisms_pcoa.bray, negvals = "zero", dround = 0) 
+  pcoaVS$values
+  tot = sum(pcoaVS$values)
+  1.044646e+01/tot*100
+  1.061985e+00/tot*100
+  
+  name<-as.vector(rownames(all_carbon_metabolisms_pcoa))
+  Pcoa1<-as.vector(pcoaVS$vectors[,1])
+  Pcoa2<-as.vector(pcoaVS$vectors[,2])
+  df <- data.frame(name, Pcoa1, Pcoa2)
+  
+  df <- df%>% mutate(type = case_when(str_detect(name, "BG") ~ "Biofilm",
+                                      str_detect(name, "W-") ~ "Seawater",
+                                      TRUE ~ "reference"))
+  
+  ggplot(df , aes(Pcoa1, Pcoa2, fill=type)) + 
+    geom_point(color="black",shape=21,size=5) +
+    theme_bw()+
+    theme(text = element_text(size=24), 
+          axis.text.x = element_text(size=24),
+          axis.text.y = element_text(size=24),
+          legend.text=element_text(size=24)
+    )+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          axis.line = element_line(colour = "black"),
+          panel.border = element_rect(colour = "black", fill=NA, size=1))+
+    theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+          axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+    scale_fill_manual(values=c("#44ABCB" ,"#9D9495","#C64F53"))+
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank())+
+    theme(legend.position="none")+
+    ylab("PC 2 (5.47%)")+
+    xlab("PC 1 (53.83%)")
+  
+  anosim(all_Transporters_metabolisms_pcoa.bray, df$type)
+  
+  
+
+  
+  
+  
+  
+  
+  metabolism_Energy_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_69fullgenome/full_genome_reference_69_annotation/genome_summaries/metabolism_summary.xlsx",
+                                                sheet = "Energy")
+  
+  metabolism_Energy_summary <-  metabolism_Energy_summary[,-c(2:5)]
+  
+  
+  biofilm_Energy_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_annotation_biofilm/genome_summaries/metabolism_summary.xlsx", 
+                                             sheet = "Energy")
+  
+  biofilm_Energy_summary <- biofilm_Energy_summary[,-c(1:5)]
+  
+  
+  
+  prochlorococcus_Energy_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_13_prochlorococcus_annotation/genome_summaries/metabolism_summary.xlsx", 
+                                                     sheet = "Energy")
+  
+  prochlorococcus_Energy_summary <- prochlorococcus_Energy_summary [,-c(1:5)]
+  
+  
+  syn63_Energy_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_synechococcus63_annotation/genome_summaries/metabolism_summary.xlsx", 
+                                           sheet = "Energy")
+  
+  
+  syn63_Energy_summary  <-  syn63_Energy_summary[,-c(1:5)]
+  
+  
+  all_Energy_metabolisms <- cbind( metabolism_Energy_summary,biofilm_Energy_summary,prochlorococcus_Energy_summary, syn63_Energy_summary )
+  
+  all_Energy_metabolisms$gene_id = c(1:692)
+  
+  all_Energy_metabolisms_pcoa <- all_Energy_metabolisms %>% column_to_rownames(var="gene_id")
+  all_Energy_metabolisms_pcoa <- t(all_Energy_metabolisms_pcoa)
+  all_Energy_metabolisms_pcoa <- all_Energy_metabolisms_pcoa[rowSums(all_Energy_metabolisms_pcoa[, -1])>0, ]
+  all_Energy_metabolisms_pcoa.bray <- vegdist(all_Energy_metabolisms_pcoa, method = "bray") 
+  
+  pcoaVS <- pco(all_Energy_metabolisms_pcoa.bray, negvals = "zero", dround = 0) 
+  pcoaVS$values
+  tot = sum(pcoaVS$values)
+  1.379713e+00/tot*100
+  3.369639e-01/tot*100
+  
+  name<-as.vector(rownames(all_carbon_metabolisms_pcoa))
+  Pcoa1<-as.vector(pcoaVS$vectors[,1])
+  Pcoa2<-as.vector(pcoaVS$vectors[,2])
+  df <- data.frame(name, Pcoa1, Pcoa2)
+  
+  df <- df%>% mutate(type = case_when(str_detect(name, "BG") ~ "Biofilm",
+                                      str_detect(name, "W-") ~ "Seawater",
+                                      TRUE ~ "reference"))
+  
+ 
+   ggplot(df , aes(Pcoa1, Pcoa2, fill=type)) + 
+    geom_point(color="black",shape=21,size=5) +
+    theme_bw()+
+    theme(text = element_text(size=24), 
+          axis.text.x = element_text(size=24),
+          axis.text.y = element_text(size=24),
+          legend.text=element_text(size=24)
+    )+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          axis.line = element_line(colour = "black"),
+          panel.border = element_rect(colour = "black", fill=NA, size=1))+
+    theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+          axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+    scale_fill_manual(values=c("#44ABCB" ,"#9D9495","#C64F53"))+
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank())+
+    theme(legend.position="none")+
+    ylab("PC 2 (8.87%)")+
+    xlab("PC 1 (36.34%)")
+  
+  anosim(all_Energy_metabolisms_pcoa.bray, df$type)
+  
+  df_2 <- df %>% filter(type %in% 'Seawater') 
+  ggplot(df_2, aes(Pcoa1, Pcoa2, fill=type, label = df_2$name)) + geom_text()
+  
+  
+  
+  
+  
+  
+  metabolism_Nitrogen_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_69fullgenome/full_genome_reference_69_annotation/genome_summaries/metabolism_summary.xlsx",
+                                          sheet = "Organic Nitrogen")
+  
+  metabolism_Nitrogen_summary <-  metabolism_Nitrogen_summary[,-c(2:5)]
+  
+  
+  biofilm_Nitrogen_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_annotation_biofilm/genome_summaries/metabolism_summary.xlsx", 
+                                       sheet = "Organic Nitrogen")
+  
+  biofilm_Nitrogen_summary <- biofilm_Nitrogen_summary[,-c(1:5)]
+  
+  
+  
+  prochlorococcus_Nitrogen_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_13_prochlorococcus_annotation/genome_summaries/metabolism_summary.xlsx", 
+                                               sheet = "Organic Nitrogen")
+  
+  prochlorococcus_Nitrogen_summary <- prochlorococcus_Nitrogen_summary [,-c(1:5)]
+  
+  
+  syn63_Nitrogen_summary <- read_excel("~/Desktop/Qian_Lab/biofilm101/DRAM_synechococcus63_annotation/genome_summaries/metabolism_summary.xlsx", 
+                                     sheet = "Organic Nitrogen")
+  
+  
+  syn63_Nitrogen_summary  <-  syn63_Nitrogen_summary[,-c(1:5)]
+  
+  
+  all_Nitrogen_metabolisms <- cbind( metabolism_Nitrogen_summary,biofilm_Nitrogen_summary,prochlorococcus_Nitrogen_summary, syn63_Nitrogen_summary )
+  
+  all_Nitrogen_metabolisms$gene_id = c(1:758)
+  
+  all_Nitrogen_metabolisms_pcoa <- all_Nitrogen_metabolisms %>% column_to_rownames(var="gene_id")
+  all_Nitrogen_metabolisms_pcoa <- t(all_Nitrogen_metabolisms_pcoa)
+  all_Nitrogen_metabolisms_pcoa <- all_Nitrogen_metabolisms_pcoa[rowSums(all_Nitrogen_metabolisms_pcoa[, -1])>0, ]
+  all_Nitrogen_metabolisms_pcoa.bray <- vegdist(all_Nitrogen_metabolisms_pcoa, method = "bray") 
+  
+  pcoaVS <- pco(all_Nitrogen_metabolisms_pcoa.bray, negvals = "zero", dround = 0) 
+  pcoaVS$values
+  tot = sum(pcoaVS$values)
+  2.828129e+00/tot*100
+  3.207910e-01/tot*100
+  
+  name<-as.vector(rownames(all_carbon_metabolisms_pcoa))
+  Pcoa1<-as.vector(pcoaVS$vectors[,1])
+  Pcoa2<-as.vector(pcoaVS$vectors[,2])
+  df <- data.frame(name, Pcoa1, Pcoa2)
+  
+  df <- df%>% mutate(type = case_when(str_detect(name, "BG") ~ "Biofilm",
+                                      str_detect(name, "W-") ~ "Seawater",
+                                      TRUE ~ "reference"))
+  
+  
+  ggplot(df , aes(Pcoa1, Pcoa2, fill=type)) + 
+    geom_point(color="black",shape=21,size=5) +
+    theme_bw()+
+    theme(text = element_text(size=24), 
+          axis.text.x = element_text(size=24),
+          axis.text.y = element_text(size=24),
+          legend.text=element_text(size=24)
+    )+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          axis.line = element_line(colour = "black"),
+          panel.border = element_rect(colour = "black", fill=NA, size=1))+
+    theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+          axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+    scale_fill_manual(values=c("#44ABCB" ,"#9D9495","#C64F53"))+
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank())+
+    theme(legend.position="none")+
+    ylab("PC 2 (5.78%)")+
+    xlab("PC 1 (50.96%)")
+  
+  
+  
+  
+  
+  
+  allbins_function_PCoA <- read_excel("~/Desktop/Qian_Lab/biofilm101/allbins_function_PCoA.xlsx")
+  
+  duplicate <- c("GCA_000010065.1_ASM1006v1_genomic",'GCA_000012625.1_ASM1262v1_genomic','GCA_000013205.1_ASM1320v1_genomic', 'GCA_000013225.1_ASM1322v1_genomic','GCA_000014585.1_ASM1458v1_genomic','GCA_000019485.1_ASM1948v1_genomic','GCA_000195975.1_ASM19597v1_genomic')
+  
+  allbins_function_PCoA <- allbins_function_PCoA %>% select(!duplicate)
+  
+  
+  allbins_function_PCoA_trim <- allbins_function_PCoA %>% gather(Location, Abundance, -c(1:4)) %>% group_by(Location, header) %>% summarise(Abundance = sum(Abundance)) %>%
+    spread(Location, Abundance) %>% column_to_rownames("header")
+  
+  allbins_function_PCoA_trim <- allbins_function_PCoA_trim[rowSums(allbins_function_PCoA_trim[, -1])>0, ]
+  allbins_function_PCoA_trim <- na.omit(allbins_function_PCoA_trim)
+  
+  allbins_function_PCoA_trim.bray <- vegdist(allbins_function_PCoA_trim, method = "bray") 
+  
+  pcoaVS <- pco(allbins_function_PCoA_trim.bray, negvals = "zero", dround = 0) 
+  pcoaVS$values
+  tot = sum(pcoaVS$values)
+  2.8817379161/tot*100
+  1.9900539768/tot*100
+  
+  name<-as.vector(rownames(allbins_function_PCoA_trim))
+  Pcoa1<-as.vector(pcoaVS$vectors[,1])
+  Pcoa2<-as.vector(pcoaVS$vectors[,2])
+  df <- data.frame(name, Pcoa1, Pcoa2)
+  
+  
+  ggplot(df , aes(Pcoa1, Pcoa2, label=name)) + 
+    geom_text()+ 
+    theme_bw()+
+    theme(text = element_text(size=24), 
+          axis.text.x = element_text(size=24),
+          axis.text.y = element_text(size=24),
+          legend.text=element_text(size=24)
+    )+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          axis.line = element_line(colour = "black"),
+          panel.border = element_rect(colour = "black", fill=NA, size=1))+
+    theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+          axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+    scale_fill_manual(values=c("#44ABCB" ,"#9D9495","#C64F53","darkorange"))+
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank())+
+    theme(legend.position="none")+
+    ylab("PC 2 (5.55%)")+
+    xlab("PC 1 (78.56%)")
+    
+  
+
+  
+  
+  allbins_function_PCoA_trim.bray <- vegdist(t(allbins_function_PCoA_trim), method = "bray")
+  
+
+  
+  
+  pcoaVS <- pco(allbins_function_PCoA_trim.bray, negvals = "zero", dround = 0) 
+  pcoaVS$values
+  tot = sum(pcoaVS$values)
+  2.237775e+00/tot*100
+  1.275268e-01/tot*100
+  
+  name<-as.vector(rownames(t(allbins_function_PCoA_trim)))
+  Pcoa1<-as.vector(pcoaVS$vectors[,1])
+  Pcoa2<-as.vector(pcoaVS$vectors[,2])
+  df <- data.frame(name, Pcoa1, Pcoa2)
+  
+  
+  df <- df%>% mutate(type = case_when(str_detect(name, "BG") ~ "Biofilm",
+                                      str_detect(name, "W-") ~ "Synechococcus",
+                                      str_detect(name,"P-") ~"Prochlorococcus",
+                                      TRUE ~ "reference"))
+  
+  df_2 <- df %>% filter(!name %in% c("BG-656","BG-601","BG-569","BG-311","BG-201","BG-003"))
+  
+  
+  ggplot(df, aes(Pcoa1, Pcoa2, fill=type)) + 
+    geom_point(color="black",shape=21,size=5) +
+    theme_bw()+
+    theme(text = element_text(size=24), 
+          axis.text.x = element_text(size=24),
+          axis.text.y = element_text(size=24),
+          legend.text=element_text(size=24)
+    )+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          axis.line = element_line(colour = "black"),
+          panel.border = element_rect(colour = "black", fill=NA, size=1))+
+    theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+          axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+    scale_fill_manual(values=c("#44ABCB" ,"darkorange","#9D9495","#C64F53"))+
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank())+
+    theme(legend.position="none")+
+    ylab("PC 2 (4.57%)")+
+    xlab("PC 1 (80.13%)")
+  
+
+  
+ ggplot(df_2, aes(Pcoa1, Pcoa2, fill=type)) + 
+    geom_point(color="black",shape=21,size=8) +
+    theme_bw()+
+    theme(text = element_text(size=24), 
+          axis.text.x = element_text(size=24),
+          axis.text.y = element_text(size=24),
+          legend.text=element_text(size=24)
+    )+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          axis.line = element_line(colour = "black"),
+          panel.border = element_rect(colour = "black", fill=NA, size=1))+
+    theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+          axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+    scale_fill_manual(values=c("#44ABCB" ,"darkorange","#9D9495","#C64F53"))+
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank())+
+    theme(legend.position="none")+
+   ylab("PC 2 (4.57%)")+
+   xlab("PC 1 (80.13%)")
+  
+  
+  
+
+  
+  
+  
+  
+  
+  df_3 <- df_2 %>% filter(!name %in% "W-")
+  
+  
+  ggplot(df_2, aes(Pcoa1, Pcoa2, label=name)) + 
+    geom_text()+
+    theme_bw()+
+    theme(text = element_text(size=24), 
+          axis.text.x = element_text(size=24),
+          axis.text.y = element_text(size=24),
+          legend.text=element_text(size=24)
+    )+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          axis.line = element_line(colour = "black"),
+          panel.border = element_rect(colour = "black", fill=NA, size=1))+
+    theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+          axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+    scale_fill_manual(values=c("#44ABCB" ,"darkorange","#9D9495","#C64F53"))+
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank())+
+    theme(legend.position="none")+
+    ylab("PC 2 (5.55%)")+
+    xlab("PC 1 (78.56%)")
+  
+  
+  
+  stat_ellipse( size=0.5,level = 0.95,type = "norm")+
+    
+  anosim(allbins_function_PCoA_trim.bray, df$type)
+  
+  
+  
+  
+  df_4 <- df_2[,1:3]
+  
+  
+  PCoA_plot <-  ggplot(df_2, aes(Pcoa1, Pcoa2)) + 
+    geom_point(color="black",shape=21,size=5) +
+    theme_bw()+
+    theme(text = element_text(size=24), 
+          axis.text.x = element_text(size=24),
+          axis.text.y = element_text(size=24),
+          legend.text=element_text(size=24)
+    )+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          axis.line = element_line(colour = "black"),
+          panel.border = element_rect(colour = "black", fill=NA, size=1))+
+    theme(axis.text.x = element_text(angle = 0, vjust = 0.5,color="black"),
+          axis.text.y = element_text(angle = 0, hjust = 0.5,color="black"))+
+    scale_fill_manual(values=c("#44ABCB" ,"darkorange","#9D9495","#C64F53"))+
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank())+
+    theme(legend.position="none")+
+    ylab("PC 2 (5.55%)")+
+    xlab("PC 1 (78.56%)")
+  
+  
+  allbins_function_PCoA_trim_trim_env<- allbins_function_PCoA %>% gather(Location, Abundance, -c(1:4)) %>% group_by(Location, header) %>% summarise(Abundance = sum(Abundance)) %>%
+    spread(Location, Abundance) %>% column_to_rownames(var="header") %>% t(.) %>% as.data.frame(.)
+  
+  
+  
+  rownamefunction <- row.names(allbins_function_PCoA_trim_trim_env)
+  rownames(pcoaVS$vectors) <- rownamefunction
+  allbins_function_PCoA_trim_trim_env_env <- allbins_function_PCoA_trim_trim_env %>%
+    select(where(~ any(. != 0)))
+  
+  bio.fit <- envfit( pcoaVS$vectors, allbins_function_PCoA_trim_trim_env_env, perm = 999)
+  
+  df_biofit<-scores(bio.fit,display=c("vectors"))
+  df_biofit<-df_biofit*vegan:::ordiArrowMul(df_biofit)
+  df_biofit<-as.data.frame(df_biofit)
+  
+  PCoA_plot+geom_segment(data=df_biofit, aes(x = 0, y = 0, xend = 1*Dim1, yend = 1*Dim2),
+                         arrow = arrow(length = unit(0.1, "cm")),color="#808080",alpha=0.5)+
+    geom_label_repel(data=as.data.frame(df_biofit*1),aes(1*Dim1,1*Dim2, label = rownames(df_biofit)),size=6, color="#808080",max.overlaps = Inf)
+  
+  
+  
+  
+  
+  allbins_function_PCoA <- read_excel("~/Desktop/Qian_Lab/biofilm101/allbins_function_PCoA.xlsx", 
+                                      sheet = "Sheet3")
+  
+  duplicate <- c("GCA_000010065.1_ASM1006v1_genomic",'GCA_000012625.1_ASM1262v1_genomic','GCA_000013205.1_ASM1320v1_genomic', 'GCA_000013225.1_ASM1322v1_genomic','GCA_000014585.1_ASM1458v1_genomic','GCA_000019485.1_ASM1948v1_genomic','GCA_000195975.1_ASM19597v1_genomic')
+  
+  allbins_function_PCoA <- allbins_function_PCoA %>% select(!duplicate)
+  
+  allbins_function_PCoA_barplot <- allbins_function_PCoA %>% gather(Location, Abundance, -c(1:4)) %>% group_by(Location, header) %>% summarise(Abundance = sum(Abundance)) 
+  topfunctionindex <- allbins_function_PCoA_barplot %>% group_by(header)%>% summarise(sum=sum(Abundance)) %>% arrange(desc(sum)) %>% .[1:15,1] %>% unlist(.) %>% as.vector(.)
+  allbins_function_PCoA_barplot_top20 <- allbins_function_PCoA_barplot %>% filter(header %in% topfunctionindex)
+
+  allbins_function_PCoA_barplot_top20_filter <-  allbins_function_PCoA_barplot_top20 %>% filter(!Location == c("GCA_000010065.1_ASM1006v1_genomic",'GCA_000012625.1_ASM1262v1_genomic','GCA_000013205.1_ASM1320v1_genomic', 'GCA_000013225.1_ASM1322v1_genomic','GCA_000014585.1_ASM1458v1_genomic','GCA_000019485.1_ASM1948v1_genomic','GCA_000195975.1_ASM19597v1_genomic'))
+  
+  
+  
+  
+ 
+  
+  ggplot( allbins_function_PCoA_barplot_top20_filter , aes(x=Location, y=Abundance, fill=header)) + 
+    geom_bar(stat="identity", width = 1)+
+    ylab('')+
+    xlab('')+
+    theme_bw()+
+    theme(text = element_text(size=24), 
+          axis.text.x = element_text(size=24),
+          axis.text.y = element_text(size=24),
+          legend.text=element_text(size=24)
+    )+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          axis.line = element_line(colour = "black"),
+          panel.border = element_rect(colour = "black", fill=NA, size=1))+
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+    scale_fill_manual(values = palette_3)+
+    scale_color_manual(values = palette_3)
+  
+  
+  
+  n <- 25
+  palette_3 <- distinctColorPalette(n)
+
+
+
+# target genes analysis 
+  
+  
+  target_gene_heatmap <- read_excel("~/Desktop/Qian_Lab/biofilm101/target_gene_heatmap.xlsx")
+  
+  
+
+  target_gene_heatmap_gather <-  target_gene_heatmap %>% gather("sample","value",-c(1:3))
+  
+  
+  
+  target_gene_heatmap_gather_filter <-  target_gene_heatmap_gather %>% filter(!sample %in% c("GCA_000010065.1_ASM1006v1_genomic",'GCA_000012625.1_ASM1262v1_genomic','GCA_000013205.1_ASM1320v1_genomic',
+                                                                                        'GCA_000013225.1_ASM1322v1_genomic','GCA_000014585.1_ASM1458v1_genomic','GCA_000019485.1_ASM1948v1_genomic','GCA_000195975.1_ASM19597v1_genomic'))
+  
+
+  
+  target_gene_heatmap_gather_filter_genomesize <- target_gene_heatmap_gather_filter %>% filter(module %in% 'genome_size') 
+  
+  target_gene_heatmap_gather_filter_genomesize$value <- as.numeric(target_gene_heatmap_gather_filter_genomesize$value)
+ 
+  
+  ggplot(data=target_gene_heatmap_gather_filter_genomesize, aes(x=sample, y=value/1000000)) +
+    geom_bar(stat="identity", color="black",fill="black")+
+    theme(axis.line=element_blank(),
+          axis.text.x=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),
+          legend.position="none",
+          panel.background=element_blank(),
+          panel.border=element_blank(),
+          panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),
+          plot.background=element_blank())
+  
+  
+  
+  target_gene_heatmap_gather_filter_GC <- target_gene_heatmap_gather_filter %>% filter(module %in% 'GC') 
+  
+  target_gene_heatmap_gather_filter_GC$value <- as.numeric(target_gene_heatmap_gather_filter_GC$value)
+  
+  
+  ggplot(data=target_gene_heatmap_gather_filter_GC, aes(x=sample, y=value)) +
+    geom_bar(stat="identity", color="black",fill="black")+
+    theme(axis.line=element_blank(),
+          axis.text.x=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),
+          legend.position="none",
+          panel.background=element_blank(),
+          panel.border=element_blank(),
+          panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),
+          plot.background=element_blank())
+  
+  
+  target_gene_heatmap_gather_filter$value[target_gene_heatmap_gather_filter$value>0]=1
+  
+  
+  
+  
+   ggplot(  target_gene_heatmap_gather_filter, aes( sample, gene_description, fill= value)) + 
+    geom_tile()+scale_fill_gradient("value",low = "white", high = "blue") +
+     facet_wrap(~module)
+  
+   target_gene_heatmap_gather_filter$module
+   
+   target_gene_heatmap_gather_filter_nick <- target_gene_heatmap_gather_filter %>% filter(module %in% 'Nickel transport system') 
+   
+   ggplot( target_gene_heatmap_gather_filter_nick, aes( sample, gene_description, fill= value)) + 
+     geom_tile()+scale_fill_gradient("value",low = "white", high = "blue") +
+     theme(axis.line=element_blank(),
+           axis.text.x=element_blank(),
+           axis.text.y=element_blank(),
+           axis.ticks=element_blank(),
+           axis.title.x=element_blank(),
+           axis.title.y=element_blank(),
+           legend.position="none",
+           panel.background=element_blank(),
+           panel.border=element_blank(),
+           panel.grid.major=element_blank(),
+           panel.grid.minor=element_blank(),
+           plot.background=element_blank())
+  
+   target_gene_heatmap_gather_filter_iron <- target_gene_heatmap_gather_filter %>% filter(module %in% 'Iron complex transport system') 
+   
+   ggplot( target_gene_heatmap_gather_filter_iron, aes( sample, gene_description, fill= value)) + 
+     geom_tile()+scale_fill_gradient("value",low = "white", high = "red") +
+     theme(axis.line=element_blank(),
+           axis.text.x=element_blank(),
+           axis.text.y=element_blank(),
+           axis.ticks=element_blank(),
+           axis.title.x=element_blank(),
+           axis.title.y=element_blank(),
+           legend.position="none",
+           panel.background=element_blank(),
+           panel.border=element_blank(),
+           panel.grid.major=element_blank(),
+           panel.grid.minor=element_blank(),
+           plot.background=element_blank())
+   
+   
+   target_gene_heatmap_gather_filter_zinc <- target_gene_heatmap_gather_filter %>% filter(module %in% 'Zinc transport system') 
+   
+   ggplot( target_gene_heatmap_gather_filter_zinc, aes( sample, gene_description, fill= value)) + 
+     geom_tile()+scale_fill_gradient("value",low = "white", high = "orange") +
+     theme(axis.line=element_blank(),
+           axis.text.x=element_blank(),
+           axis.text.y=element_blank(),
+           axis.ticks=element_blank(),
+           axis.title.x=element_blank(),
+           axis.title.y=element_blank(),
+           legend.position="none",
+           panel.background=element_blank(),
+           panel.border=element_blank(),
+           panel.grid.major=element_blank(),
+           panel.grid.minor=element_blank(),
+           plot.background=element_blank())
+   
+   target_gene_heatmap_gather_filter_Manganese <- target_gene_heatmap_gather_filter %>% filter(module %in% 'Manganese transport system') 
+   
+   ggplot( target_gene_heatmap_gather_filter_Manganese, aes( sample, gene_description, fill= value)) + 
+     geom_tile()+scale_fill_gradient("value",low = "white", high = "purple") +
+     theme(axis.line=element_blank(),
+           axis.text.x=element_blank(),
+           axis.text.y=element_blank(),
+           axis.ticks=element_blank(),
+           axis.title.x=element_blank(),
+           axis.title.y=element_blank(),
+           legend.position="none",
+           panel.background=element_blank(),
+           panel.border=element_blank(),
+           panel.grid.major=element_blank(),
+           panel.grid.minor=element_blank(),
+           plot.background=element_blank())
+   
+   
+   target_gene_heatmap_gather_filter_Phosphate <- target_gene_heatmap_gather_filter %>% filter(module %in% 'Phosphate transport system') 
+   
+   ggplot( target_gene_heatmap_gather_filter_Phosphate, aes( sample, gene_description, fill= value)) + 
+     geom_tile()+scale_fill_gradient("value",low = "white", high = "dark green") +
+     theme(axis.line=element_blank(),
+           axis.text.x=element_blank(),
+           axis.text.y=element_blank(),
+           axis.ticks=element_blank(),
+           axis.title.x=element_blank(),
+           axis.title.y=element_blank(),
+           legend.position="none",
+           panel.background=element_blank(),
+           panel.border=element_blank(),
+           panel.grid.major=element_blank(),
+           panel.grid.minor=element_blank(),
+           plot.background=element_blank())
+   
+   
+   
+  
+   target_gene_heatmap_gather_filter_Phosphate <- target_gene_heatmap_gather_filter %>% filter(module %in% 'Phosphate transport system') 
+   
+   ggplot( target_gene_heatmap_gather_filter_Phosphate, aes( sample, gene_description, fill= value)) + 
+     geom_tile()+scale_fill_gradient("value",low = "white", high = "dark green") +
+     theme(axis.line=element_blank(),
+           axis.text.x=element_blank(),
+           axis.text.y=element_blank(),
+           axis.ticks=element_blank(),
+           axis.title.x=element_blank(),
+           axis.title.y=element_blank(),
+           legend.position="none",
+           panel.background=element_blank(),
+           panel.border=element_blank(),
+           panel.grid.major=element_blank(),
+           panel.grid.minor=element_blank(),
+           plot.background=element_blank())
+   
+   
+   
+   target_gene_heatmap_gather_filter_Pigment <- target_gene_heatmap_gather_filter %>% filter(module %in% 'Pigment') 
+   
+   ggplot( target_gene_heatmap_gather_filter_Pigment, aes( sample, gene_description, fill= value)) + 
+     geom_tile()+scale_fill_gradient("value",low = "white", high = "darkolivegreen3") +
+     theme(axis.line=element_blank(),
+           axis.text.x=element_blank(),
+           axis.text.y=element_blank(),
+           axis.ticks=element_blank(),
+           axis.title.x=element_blank(),
+           axis.title.y=element_blank(),
+           legend.position="none",
+           panel.background=element_blank(),
+           panel.border=element_blank(),
+           panel.grid.major=element_blank(),
+           panel.grid.minor=element_blank(),
+           plot.background=element_blank())
+   
